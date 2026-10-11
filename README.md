@@ -25,6 +25,14 @@ So I treated it like a product:
 | **The Margin** | A public guestbook where visitors leave notes for future visitors |
 | **Letter** | A contact form written as a letter, delivered to my inbox |
 
+## A look at both themes
+
+<p align="center">
+  <img src="client/public/portfolio_dark.png" alt="Portfolio in the dark Ink theme" width="49%">
+  <img src="client/public/portfolio_light.png" alt="Portfolio in the light Paper theme" width="49%">
+</p>
+<p align="center"><sub>Ink (dark, the default) and Paper (light)</sub></p>
+
 ## Engineering highlights
 
 - **Single source of content.** Everything on the site comes from one file (`content/content.js`). The server mirrors it into MongoDB on startup, and the frontend bundles it as a fallback, so the page renders instantly even if the API is slow.
