@@ -1,0 +1,17 @@
+{
+  "name": "portfolio-server",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node --watch --watch-path=. --watch-path=../content index.js --port=5000",
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.6",
+    "dotenv": "^18.0.7",
+    "express": "^4.22.3",
+    "express-rate-limit": "^8.7.1",
+    "mongoose": "^9.11.1",
+    "nodemailer": "^10.1.0"
+  }
+}
