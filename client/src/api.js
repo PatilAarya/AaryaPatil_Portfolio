@@ -1,4 +1,5 @@
-const API = import.meta.env.VITE_API_URL || '';
+// The API's address, e.g. https://your-api.onrender.com (empty in dev: Vite proxies /api).
+const API = (import.meta.env.VITE_API_URL || '').replace(/\/+$/, '');
 
 async function request(path, options = {}) {
   const res = await fetch(`${API}/api${path}`, {

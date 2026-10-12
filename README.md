@@ -38,14 +38,14 @@ So I treated it like a product:
 - **Single source of content.** Everything on the site comes from one file (`content/content.js`). The server mirrors it into MongoDB on startup, and the frontend bundles it as a fallback, so the page renders instantly even if the API is slow.
 - **Resilient by default.** If the database is unavailable, the server falls back to in-memory storage instead of crashing.
 - **Abuse protection.** Rate limiting on the guestbook and contact endpoints, input sanitisation, and honeypot fields to catch bots.
-- **Email forwarding.** Every letter is saved to MongoDB and sent to my Gmail via Nodemailer, with the sender set as reply-to, so I can answer with one click.
+- **Email forwarding.** Every letter is saved to MongoDB first, then forwarded to my inbox through Resend's HTTPS API, with the sender set as reply-to, so I can answer with one click. A failed email never fails the visitor's submission.
 - **Admin endpoints.** Token-protected routes to read letters and remove guestbook notes.
 - **Accessibility and performance.** Responsive down to small phones, keyboard navigable, honours "reduced motion" settings, and pauses animations that are off-screen.
 
 ## Tech stack
 
 **Frontend:** React, Vite, hand-written CSS (no UI framework), Simple Icons
-**Backend:** Node.js, Express, Mongoose, Nodemailer, express-rate-limit
+**Backend:** Node.js, Express, Mongoose, Resend (email API), express-rate-limit
 **Database:** MongoDB Atlas
 **Fonts:** Fraunces, Instrument Sans, JetBrains Mono
 
@@ -64,15 +64,25 @@ npm run setup      # installs root, server and client dependencies
 npm run dev        # API on :5000, site on http://localhost:5173
 ```
 
-To store data and receive letters, copy `server/.env.example` to `server/.env` and fill in `MONGODB_URI`, `GMAIL_USER`, `GMAIL_APP_PASSWORD` and `ADMIN_TOKEN`. Without these, the site still runs, using in-memory storage.
+To store data and receive letters, copy `server/.env.example` to `server/.env` and fill in `MONGODB_URI`, `RESEND_API_KEY`, `MAIL_TO` and `ADMIN_TOKEN`. Without these, the site still runs, using in-memory storage.
 
 ## Deploy
 
-One service (for example on Render):
+The frontend and the API are deployed separately.
 
-- Build command: `npm run build`
-- Start command: `npm start`
-- Environment variables: the same as `server/.env`
+**Frontend on Vercel**
+
+- Root directory: `client` (with "Include files outside the root directory" turned on, since the site reads `content/content.js`)
+- Build command: `npm run build`, output directory: `dist`
+- Environment variable: `VITE_API_URL` (the API's address, without `/api`)
+
+**API on Render**
+
+- Root directory: blank (the repository root)
+- Build command: `npm ci --prefix server`
+- Start command: `npm --prefix server start`
+- Health check path: `/api/health`
+- Environment variables: `MONGODB_URI`, `CLIENT_ORIGIN` (the Vercel address), `ADMIN_TOKEN`, `RESEND_API_KEY`, `MAIL_TO`, `NODE_VERSION=22`
 
 ## Contact
 

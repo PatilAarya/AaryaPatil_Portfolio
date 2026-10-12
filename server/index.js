@@ -5,7 +5,6 @@ import dotenv from 'dotenv';
 import express from 'express';
 import cors from 'cors';
 import rateLimit from 'express-rate-limit';
-import nodemailer from 'nodemailer';
 import content from '../content/content.js';
 import { createStore } from './db.js';
 
@@ -18,18 +17,42 @@ const PORT = Number(portArg?.slice(7)) || Number(process.env.PORT) || 5000;
 const ADMIN_TOKEN = process.env.ADMIN_TOKEN || '';
 const store = await createStore(process.env.MONGODB_URI, content);
 
-// Optional: forward every letter to your inbox (Gmail + an App Password).
-const { GMAIL_USER, GMAIL_APP_PASSWORD } = process.env;
-const MAIL_TO = process.env.MAIL_TO || GMAIL_USER;
-const mailer = GMAIL_USER && GMAIL_APP_PASSWORD
-  ? nodemailer.createTransport({ service: 'gmail', auth: { user: GMAIL_USER, pass: GMAIL_APP_PASSWORD } })
-  : null;
-if (!mailer) console.warn('[mail] GMAIL_USER / GMAIL_APP_PASSWORD not set. Letters are saved but not emailed.');
+// Optional: forward every letter to your inbox through Resend's HTTPS API.
+// (Plain SMTP is blocked on Render's free tier, so no Gmail/nodemailer here.)
+const { RESEND_API_KEY, MAIL_TO } = process.env;
+// Without a verified domain, Resend only sends from its shared address,
+// and only to the email your Resend account was created with.
+const MAIL_FROM = process.env.MAIL_FROM || 'Portfolio letters <onboarding@resend.dev>';
+const canMail = Boolean(RESEND_API_KEY && MAIL_TO);
+if (!canMail) console.warn('[mail] RESEND_API_KEY / MAIL_TO not set. Letters are saved but not emailed.');
+
+async function forwardLetter({ name, email, topic, body }) {
+  const res = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      from: MAIL_FROM,
+      to: [MAIL_TO],
+      reply_to: `${name} <${email}>`,
+      subject: `New letter from ${name}: ${topic || 'no topic'}`,
+      text: `${body}\n\n${name} <${email}>\n\nHit reply to answer them directly.`,
+    }),
+    signal: AbortSignal.timeout(10_000),
+  });
+  if (!res.ok) throw new Error(`Resend ${res.status}: ${await res.text()}`);
+}
 
 const app = express();
 app.set('trust proxy', 1);
 app.use(express.json({ limit: '16kb' }));
-if (process.env.CLIENT_ORIGIN) app.use(cors({ origin: process.env.CLIENT_ORIGIN }));
+// Only the site(s) listed in CLIENT_ORIGIN may call this API from a browser.
+// Comma-separated, e.g. "https://aarya.vercel.app,https://aaryapatil.com"; trailing slashes are ignored.
+const origins = (process.env.CLIENT_ORIGIN || '')
+  .split(',')
+  .map((o) => o.trim().replace(/\/+$/, ''))
+  .filter(Boolean);
+if (origins.length) app.use(cors({ origin: origins }));
+else console.warn('[cors] CLIENT_ORIGIN not set. Browsers on other domains cannot call this API.');
 
 /* ── helpers ─────────────────────────────────────────────── */
 
@@ -92,15 +115,10 @@ app.post('/api/messages', limiter(5, 60), wrap(async (req, res) => {
   if (!isEmail(email)) return res.status(400).json({ error: 'That email address looks off.' });
   await store.addMessage({ name, email, topic, body });
   console.log(`[letter] from ${name} <${email}> about "${topic}"`);
-  if (mailer) {
+  if (canMail) {
     // The letter is already saved, so a mail hiccup shouldn't fail the visitor's request.
-    mailer.sendMail({
-      from: `Portfolio letters <${GMAIL_USER}>`,
-      to: MAIL_TO,
-      replyTo: `${name} <${email}>`,
-      subject: `New letter from ${name}: ${topic || 'no topic'}`,
-      text: `${body}\n\n— ${name} <${email}>\n\nHit reply to answer them directly.`,
-    }).catch((err) => console.error('[mail] could not forward letter:', err.message));
+    forwardLetter({ name, email, topic, body })
+      .catch((err) => console.error('[mail] could not forward letter:', err.message));
   }
   res.status(201).json({ ok: true });
 }));
